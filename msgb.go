@@ -1,20 +1,31 @@
 package msgb
 
-import "reflect"
+import (
+	"context"
+	"reflect"
+)
 
 type (
 	MessageBus interface {
 		AddAdapter(Adapter)
+		GetSubscribers(AdapterType) []SubscriberRegister
+		GetSubjects(AdapterType) []SubjectRegister
+		InicializeSubscribers(context.Context)
+
 		getAdapters() []Adapter
 		getAdapter(AdapterType) Adapter
+		getAdaptersBySubject(reflect.Type) []Adapter
 
-		addSubject(Subject)
-		getSubjects() []Subject
-		getSubject(reflect.Type, AdapterType) *Subject
+		addSubject(SubjectRegister)
+		getSubjects() []SubjectRegister
+		getSubject(reflect.Type, AdapterType) *SubjectRegister
+
+		addSubscriber(SubscriberRegister)
 	}
 	MessageBusImpl struct {
-		adapters []Adapter
-		subjects []Subject
+		adapters    []Adapter
+		subjects    []SubjectRegister
+		subscribers []SubscriberRegister
 	}
 )
 
@@ -45,7 +56,28 @@ func (m *MessageBusImpl) getAdapter(at AdapterType) Adapter {
 	panic(errAdapterNotRegisteredYet)
 }
 
-func (m *MessageBusImpl) addSubject(s Subject) {
+func (m *MessageBusImpl) getAdaptersBySubject(st reflect.Type) []Adapter {
+	ats := []AdapterType{}
+	r := []Adapter{}
+	for _, s := range m.subjects {
+		if s.subType == st {
+			ats = append(ats, s.adapterType)
+		}
+	}
+	for _, a := range m.adapters {
+		for _, at := range ats {
+			if a.GetType() == at {
+				r = append(r, a)
+			}
+		}
+	}
+	if len(r) == 0 {
+		panic(errSubjectNotRegisteredYet)
+	}
+	return r
+}
+
+func (m *MessageBusImpl) addSubject(s SubjectRegister) {
 	for _, ms := range m.subjects {
 		if ms.subType == s.subType && ms.adapterType == s.adapterType {
 			return
@@ -54,15 +86,50 @@ func (m *MessageBusImpl) addSubject(s Subject) {
 	m.subjects = append(m.subjects, s)
 }
 
-func (m *MessageBusImpl) getSubjects() []Subject {
+func (m *MessageBusImpl) getSubjects() []SubjectRegister {
 	return m.subjects
 }
 
-func (m *MessageBusImpl) getSubject(st reflect.Type, at AdapterType) *Subject {
+func (m *MessageBusImpl) getSubject(st reflect.Type, at AdapterType) *SubjectRegister {
 	for _, s := range m.subjects {
 		if s.subType == st && s.adapterType == at {
 			return &s
 		}
 	}
 	panic(errSubjectNotRegisteredYet)
+}
+
+func (m *MessageBusImpl) addSubscriber(sr SubscriberRegister) {
+	for _, s := range m.subscribers {
+		if s.SubType == sr.SubType && s.adapterType == sr.adapterType {
+			return
+		}
+	}
+	m.subscribers = append(m.subscribers, sr)
+}
+
+func (m *MessageBusImpl) GetSubscribers(a AdapterType) []SubscriberRegister {
+	r := []SubscriberRegister{}
+	for _, s := range m.subscribers {
+		if s.adapterType == a {
+			r = append(r, s)
+		}
+	}
+	return r
+}
+
+func (m *MessageBusImpl) GetSubjects(a AdapterType) []SubjectRegister {
+	r := []SubjectRegister{}
+	for _, s := range m.subjects {
+		if s.adapterType == a {
+			r = append(r, s)
+		}
+	}
+	return r
+}
+
+func (m *MessageBusImpl) InicializeSubscribers(ctx context.Context) {
+	for _, a := range m.adapters {
+		go a.InitializeSubscribers(ctx)
+	}
 }

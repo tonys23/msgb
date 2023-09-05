@@ -3,24 +3,28 @@ package msgb
 import "reflect"
 
 type (
-	Subject struct {
+	SubjectRegister struct {
 		subType     reflect.Type
 		adapterType AdapterType
-		cfg         interface{}
+		Cfg         interface{}
 	}
 )
 
 func AddSubject[T interface{}](m MessageBus, a AdapterType, cfg interface{}) {
 	var t T
-	m.addSubject(Subject{
+	v := reflect.ValueOf(cfg)
+	if v.Kind() == reflect.Pointer {
+		cfg = v.Elem().Interface()
+	}
+	m.addSubject(SubjectRegister{
 		subType:     reflect.TypeOf(t),
 		adapterType: a,
-		cfg:         cfg,
+		Cfg:         cfg,
 	})
 }
 
 func GetSubjectConfig[T interface{}](m MessageBus, st reflect.Type, at AdapterType) *T {
 	s := m.getSubject(st, at)
-	c := s.cfg.(T)
+	c := s.Cfg.(T)
 	return &c
 }
