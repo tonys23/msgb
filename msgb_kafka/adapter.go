@@ -46,8 +46,10 @@ type (
 		AutoOffsetReset string
 		AutoCommit      bool
 		Retries         int
-		subject         reflect.Type
-		subscriber      interface{}
+
+		subject    reflect.Type
+		subscriber interface{}
+		unmarshal  interface{}
 	}
 )
 
@@ -62,7 +64,7 @@ func AddKafkaProducer[T interface{}](m msgb.MessageBus, cfg KafkaProducerConfigu
 }
 
 func AddKafkaConsumer[T interface{}](m msgb.MessageBus, cfg KafkaConsumerConfiguration, s msgb.Subscriber[T]) {
-	msgb.AddSubscriber[T](m, Adapter, s, cfg)
+	msgb.AddSubscriber[T](m, Adapter, s, cfg, unmarshal[T])
 }
 
 func (k *KafkaAdapter) AddMessageBus(m msgb.MessageBus) {
@@ -186,6 +188,7 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 		cfg := s.Cfg.(KafkaConsumerConfiguration)
 		cfg.subscriber = s.Subs
 		cfg.subject = s.SubType
+		cfg.unmarshal = s.AdapterData[0]
 		cfgs = append(cfgs, cfg)
 	}
 	gcfg := msgb.Group(cfgs, func(cfg KafkaConsumerConfiguration) string {
@@ -271,9 +274,9 @@ func (k *KafkaAdapter) SubscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 					log.Println("error to sent to dlq:" + err.Error())
 				}
 			}
-			c.CommitMessage(msg)
 			routines--
 		}()
+		c.CommitMessage(msg)
 		for routines == k.cfg.MaxParallelMessages {
 			time.Sleep(time.Second)
 		}
@@ -309,6 +312,12 @@ func withRetries(f func() error, retries int) (err error) {
 	return err
 }
 
+func unmarshal[T interface{}](j []byte) (T, error) {
+	var o T
+	err := json.Unmarshal(j, &o)
+	return o, err
+}
+
 func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
@@ -323,10 +332,18 @@ func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err err
 		}
 	}()
 
-	z := reflect.Zero(cfg.subject).Interface()
-	if err = json.Unmarshal(msg.Value, &z); err != nil {
+	um := reflect.ValueOf(cfg.unmarshal)
+	rv := um.Call([]reflect.Value{
+		reflect.ValueOf(msg.Value),
+	})
+	zv := rv[0]
+	ev := rv[1]
+	if !ev.IsNil() {
+		err = ev.Interface().(error)
+		log.Println(err.Error())
 		return err
 	}
+	z := zv.Interface()
 	ctx := context.Background()
 	sub := reflect.ValueOf(cfg.subscriber)
 	outs := sub.Call([]reflect.Value{

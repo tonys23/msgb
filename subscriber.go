@@ -11,11 +11,12 @@ type (
 		Subs        interface{}
 		Cfg         interface{}
 		adapterType AdapterType
+		AdapterData []interface{}
 	}
 	Subscriber[T interface{}] func(context.Context, T) error
 )
 
-func AddSubscriber[T interface{}](m MessageBus, a AdapterType, s Subscriber[T], c interface{}) {
+func AddSubscriber[T interface{}](m MessageBus, a AdapterType, s Subscriber[T], c interface{}, ad ...interface{}) {
 	var t T
 	v := reflect.ValueOf(c)
 	if v.Kind() == reflect.Pointer {
@@ -26,5 +27,6 @@ func AddSubscriber[T interface{}](m MessageBus, a AdapterType, s Subscriber[T], 
 		adapterType: a,
 		Subs:        s,
 		Cfg:         c,
+		AdapterData: ad,
 	})
 }
