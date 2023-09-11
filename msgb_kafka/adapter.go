@@ -44,7 +44,6 @@ type (
 		NumPartitions   int
 		GroupId         string
 		AutoOffsetReset string
-		AutoCommit      bool
 		Retries         int
 
 		subject    reflect.Type
@@ -64,7 +63,7 @@ func AddKafkaProducer[T interface{}](m msgb.MessageBus, cfg KafkaProducerConfigu
 }
 
 func AddKafkaConsumer[T interface{}](m msgb.MessageBus, cfg KafkaConsumerConfiguration, s msgb.Subscriber[T]) {
-	msgb.AddSubscriber[T](m, Adapter, s, cfg, unmarshal[T])
+	msgb.AddSubscriber[T](m, Adapter, s, cfg, msgb.Unmarshal[T])
 }
 
 func (k *KafkaAdapter) AddMessageBus(m msgb.MessageBus) {
@@ -80,7 +79,7 @@ func (k *KafkaAdapter) getDefaultConfigMap() kafka.ConfigMap {
 func (k *KafkaAdapter) getConsumerConfigMap(cfg *KafkaConsumerConfiguration) kafka.ConfigMap {
 	return kafka.ConfigMap{
 		"bootstrap.servers":             k.cfg.BootstrapServers,
-		"enable.auto.commit":            cfg.AutoCommit,
+		"enable.auto.commit":            true,
 		"group.id":                      cfg.GroupId,
 		"auto.offset.reset":             cfg.AutoOffsetReset,
 		"partition.assignment.strategy": "cooperative-sticky",
@@ -145,7 +144,7 @@ func (k *KafkaAdapter) mapSubscribersToTopics(subs []msgb.SubscriberRegister) []
 	return tps
 }
 
-func (k *KafkaAdapter) CreateTopics(
+func (k *KafkaAdapter) createTopics(
 	ctx context.Context,
 	kcm *kafka.ConfigMap,
 	tps []kafka.TopicSpecification) {
@@ -167,14 +166,14 @@ func (k *KafkaAdapter) CreateTopics(
 	}
 }
 
-func (k *KafkaAdapter) EnsureCreateTopics(ctx context.Context) {
+func (k *KafkaAdapter) ensureCreateTopics(ctx context.Context) {
 	subs := k.messageBus.GetSubscribers(Adapter)
 	subj := k.messageBus.GetSubjects(Adapter)
 	kcm := k.getDefaultConfigMap()
-	k.CreateTopics(ctx,
+	k.createTopics(ctx,
 		&kcm,
 		k.mapSubjectsToTopics(subj))
-	go k.CreateTopics(ctx,
+	go k.createTopics(ctx,
 		&kcm,
 		k.mapSubscribersToTopics(subs))
 }
@@ -200,7 +199,7 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 		cgc := gc
 		wg.Add(1)
 		go func() {
-			if err := k.SubscribeConsumers(cctx, cgc); err != nil {
+			if err := k.subscribeConsumers(cctx, cgc); err != nil {
 				cancel(err)
 				log.Println(err.Error())
 				wg.Done()
@@ -237,8 +236,8 @@ func getConfigByTopic(cfg []KafkaConsumerConfiguration, topic string) *KafkaCons
 	return nil
 }
 
-func (k *KafkaAdapter) SubscribeConsumers(ctx context.Context, gcfg []KafkaConsumerConfiguration) error {
-	k.EnsureCreateTopics(ctx)
+func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsumerConfiguration) error {
+	k.ensureCreateTopics(ctx)
 	kcm := k.getConsumerConfigMap(&gcfg[0])
 	c, err := kafka.NewConsumer(&kcm)
 	if err != nil {
@@ -287,7 +286,7 @@ func (k *KafkaAdapter) SubscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 func (k *KafkaAdapter) sendToDlq(msg *kafka.Message, cfg *KafkaConsumerConfiguration) error {
 	kcm := k.getDefaultConfigMap()
 	topic := *msg.TopicPartition.Topic + "_error"
-	k.CreateTopics(context.Background(), &kcm, []kafka.TopicSpecification{
+	k.createTopics(context.Background(), &kcm, []kafka.TopicSpecification{
 		{
 			Topic:             topic,
 			NumPartitions:     1,
@@ -310,12 +309,6 @@ func withRetries(f func() error, retries int) (err error) {
 		}
 	}
 	return err
-}
-
-func unmarshal[T interface{}](j []byte) (T, error) {
-	var o T
-	err := json.Unmarshal(j, &o)
-	return o, err
 }
 
 func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err error) {

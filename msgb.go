@@ -2,6 +2,7 @@ package msgb
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 )
 
@@ -28,6 +29,12 @@ type (
 		subscribers []SubscriberRegister
 	}
 )
+
+func Unmarshal[T interface{}](j []byte) (T, error) {
+	var o T
+	err := json.Unmarshal(j, &o)
+	return o, err
+}
 
 func NewMessageBus() MessageBus {
 	return &MessageBusImpl{}
@@ -78,8 +85,9 @@ func (m *MessageBusImpl) getAdaptersBySubject(st reflect.Type) []Adapter {
 }
 
 func (m *MessageBusImpl) addSubject(s SubjectRegister) {
-	for _, ms := range m.subjects {
+	for i, ms := range m.subjects {
 		if ms.subType == s.subType && ms.adapterType == s.adapterType {
+			m.subjects[i] = s
 			return
 		}
 	}
@@ -100,8 +108,9 @@ func (m *MessageBusImpl) getSubject(st reflect.Type, at AdapterType) *SubjectReg
 }
 
 func (m *MessageBusImpl) addSubscriber(sr SubscriberRegister) {
-	for _, s := range m.subscribers {
+	for i, s := range m.subscribers {
 		if s.SubType == sr.SubType && s.adapterType == sr.adapterType {
+			m.subscribers[i] = sr
 			return
 		}
 	}

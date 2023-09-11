@@ -23,7 +23,6 @@ func Test_InitializeSubscribers_With_Success(t *testing.T) {
 		NumPartitions:   1,
 		GroupId:         fmt.Sprintf("%v", rand.Int63n(1000000000000)),
 		AutoOffsetReset: "earliest",
-		AutoCommit:      true,
 		Retries:         10,
 	}, func(ctx context.Context, m tests.SimpleEvent) error {
 		fmt.Println(m)
@@ -47,7 +46,6 @@ func Benchmark_InitializeSubscribers_With_Success(b *testing.B) {
 		NumPartitions:   1,
 		GroupId:         fmt.Sprintf("%v", rand.Int63n(1000000000000)),
 		AutoOffsetReset: "earliest",
-		AutoCommit:      true,
 		Retries:         10,
 	}, func(ctx context.Context, m tests.SimpleEvent) error {
 		fmt.Println(m)
