@@ -19,7 +19,7 @@ type (
 func AddSubscriber[T interface{}](
 	m MessageBus,
 	a AdapterType,
-	s Subscriber[T],
+	s interface{},
 	c interface{},
 	ad ...interface{}) {
 

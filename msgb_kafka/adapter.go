@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"msgb"
 	"os"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/Israelsodano/msgb"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
@@ -64,6 +65,14 @@ func AddKafkaProducer[T interface{}](m msgb.MessageBus, cfg KafkaProducerConfigu
 
 func AddKafkaConsumer[T interface{}](m msgb.MessageBus, cfg KafkaConsumerConfiguration, s msgb.Subscriber[T]) {
 	msgb.AddSubscriber[T](m, Adapter, s, cfg, msgb.Unmarshal[T])
+}
+
+func AddKafkaSaga[T interface{}](m msgb.MessageBus, cfg KafkaConsumerConfiguration, s msgb.SagaStateMachine[T]) {
+	msgb.AddSubscriber[msgb.SagaDefaultHandler[T]](m,
+		Adapter,
+		s.SagaDefaultHandler(),
+		cfg,
+		msgb.Unmarshal[map[string]interface{}])
 }
 
 func (k *KafkaAdapter) AddMessageBus(m msgb.MessageBus) {
@@ -262,20 +271,20 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 			break
 		}
 		routines++
-		go func() {
-			cfg := getConfigByTopic(gcfg, *msg.TopicPartition.Topic)
+		go func(m *kafka.Message) {
+			defer c.CommitMessage(m)
+			cfg := getConfigByTopic(gcfg, *m.TopicPartition.Topic)
 			if err := withRetries(func() error {
-				return callSubscribe(msg, cfg)
+				return callSubscribe(m, cfg)
 			}, cfg.Retries); err != nil {
 				if err = withRetries(func() error {
-					return k.sendToDlq(msg, cfg)
+					return k.sendToDlq(m, cfg)
 				}, 10); err != nil {
 					log.Println("error to sent to dlq:" + err.Error())
 				}
 			}
 			routines--
-		}()
-		c.CommitMessage(msg)
+		}(msg)
 		for routines == k.cfg.MaxParallelMessages {
 			time.Sleep(time.Second)
 		}

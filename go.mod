@@ -1,4 +1,4 @@
-module msgb
+module github.com/Israelsodano/msgb
 
 go 1.20
 

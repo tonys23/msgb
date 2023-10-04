@@ -2,11 +2,12 @@ package kafka_tests
 
 import (
 	"context"
-	"msgb"
-	"msgb/msgb_kafka"
-	"msgb/tests"
 	"testing"
 	"time"
+
+	"github.com/Israelsodano/msgb"
+	"github.com/Israelsodano/msgb/msgb_kafka"
+	"github.com/Israelsodano/msgb/tests"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )

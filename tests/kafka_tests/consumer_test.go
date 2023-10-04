@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"msgb/msgb_kafka"
-	"msgb/tests"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/Israelsodano/msgb/msgb_kafka"
+	"github.com/Israelsodano/msgb/tests"
 )
 
 func Test_InitializeSubscribers_With_Success(t *testing.T) {

@@ -26,20 +26,19 @@ type (
 		States     []SagaState
 		Unmarshall interface{}
 	}
-	SagaDefinition[T interface{}]     map[string]interface{}
-	SagaDefaultHandler[T interface{}] Subscriber[SagaDefinition[T]]
+	SagaDefaultHandler[T interface{}] Subscriber[map[string]interface{}]
 	SagaStateMachine[T interface{}]   interface {
 		SagaRepository[T]
-		AddSubscriber(SagaSubscriberRegister)
 		SagaDefaultHandler() SagaDefaultHandler[T]
+		addSubscriber(SagaSubscriberRegister)
 	}
 	SagaStateMachineImpl[T interface{}] struct {
 		producer    Producer
 		repository  SagaRepository[T]
 		subscribers []SagaSubscriberRegister
 	}
-	SagaSubscriber[T interface{}] func(context.Context, Producer, T) error
-	SagaEvent                     struct {
+	SagaSubscriber[I interface{}, T interface{}] func(context.Context, SagaStateMachine[I], T) error
+	SagaEvent                                    struct {
 		CorrelationId uuid.UUID
 		EventName     string
 	}
@@ -47,12 +46,12 @@ type (
 
 func When[T interface{}, R interface{}](
 	sm SagaStateMachine[T],
-	s SagaSubscriber[R],
+	s SagaSubscriber[T, R],
 	sts ...SagaState) {
 
 	var r R
 	st := reflect.TypeOf(r)
-	sm.AddSubscriber(SagaSubscriberRegister{
+	sm.addSubscriber(SagaSubscriberRegister{
 		SubType:    st,
 		Subs:       s,
 		EventName:  st.Name(),
@@ -84,7 +83,7 @@ func (sm *SagaStateMachineImpl[T]) Lock() error {
 	return sm.repository.Lock()
 }
 
-func (sm *SagaStateMachineImpl[T]) AddSubscriber(ssr SagaSubscriberRegister) {
+func (sm *SagaStateMachineImpl[T]) addSubscriber(ssr SagaSubscriberRegister) {
 	for i, v := range sm.subscribers {
 		if v.SubType == ssr.SubType {
 			sm.subscribers[i] = ssr
@@ -95,7 +94,7 @@ func (sm *SagaStateMachineImpl[T]) AddSubscriber(ssr SagaSubscriberRegister) {
 }
 
 func (sm *SagaStateMachineImpl[T]) SagaDefaultHandler() SagaDefaultHandler[T] {
-	return func(ctx context.Context, t SagaDefinition[T]) (err error) {
+	return func(ctx context.Context, t map[string]interface{}) (err error) {
 		defer func() {
 			if e := recover(); e != nil {
 				switch ee := e.(type) {
@@ -142,6 +141,7 @@ func (sm *SagaStateMachineImpl[T]) SagaDefaultHandler() SagaDefaultHandler[T] {
 		isub := reflect.ValueOf(sb.Subs)
 		risub := isub.Call([]reflect.Value{
 			reflect.ValueOf(ctx),
+			reflect.ValueOf(sm),
 			reflect.ValueOf(z),
 		})
 		if !risub[0].IsNil() {

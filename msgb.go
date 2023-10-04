@@ -27,6 +27,7 @@ type (
 		adapters    []Adapter
 		subjects    []SubjectRegister
 		subscribers []SubscriberRegister
+		sagas       []interface{}
 	}
 )
 
