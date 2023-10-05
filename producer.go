@@ -15,9 +15,11 @@ type (
 )
 
 func NewProducer(mb MessageBus) Producer {
-	return &ProducerImpl{
+	p := &ProducerImpl{
 		messageBus: mb,
 	}
+	mb.addProducer(p)
+	return p
 }
 
 func (p *ProducerImpl) Produce(ctx context.Context, m interface{}) error {

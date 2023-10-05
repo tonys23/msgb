@@ -13,6 +13,8 @@ type (
 		GetSubjects(AdapterType) []SubjectRegister
 		InicializeSubscribers(context.Context)
 
+		addProducer(Producer)
+		GetProducer() Producer
 		getAdapters() []Adapter
 		getAdapter(AdapterType) Adapter
 		getAdaptersBySubject(reflect.Type) []Adapter
@@ -27,6 +29,7 @@ type (
 		adapters    []Adapter
 		subjects    []SubjectRegister
 		subscribers []SubscriberRegister
+		producer    Producer
 		sagas       []interface{}
 	}
 )
@@ -49,6 +52,17 @@ func (m *MessageBusImpl) AddAdapter(adp Adapter) {
 	}
 	adp.AddMessageBus(m)
 	m.adapters = append(m.adapters, adp)
+}
+
+func (m *MessageBusImpl) addProducer(p Producer) {
+	m.producer = p
+}
+
+func (m *MessageBusImpl) GetProducer() Producer {
+	if m.producer == nil {
+		return &ProducerImpl{}
+	}
+	return m.producer
 }
 
 func (m *MessageBusImpl) getAdapters() []Adapter {

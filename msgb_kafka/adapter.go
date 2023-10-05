@@ -273,9 +273,12 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 		routines++
 		go func(m *kafka.Message) {
 			defer c.CommitMessage(m)
+			defer func() {
+				routines--
+			}()
 			cfg := getConfigByTopic(gcfg, *m.TopicPartition.Topic)
 			if err := withRetries(func() error {
-				return callSubscribe(m, cfg)
+				return callSubscribe(m, cfg, k.messageBus.GetProducer())
 			}, cfg.Retries); err != nil {
 				if err = withRetries(func() error {
 					return k.sendToDlq(m, cfg)
@@ -283,7 +286,7 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 					log.Println("error to sent to dlq:" + err.Error())
 				}
 			}
-			routines--
+
 		}(msg)
 		for routines == k.cfg.MaxParallelMessages {
 			time.Sleep(time.Second)
@@ -320,7 +323,7 @@ func withRetries(f func() error, retries int) (err error) {
 	return err
 }
 
-func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err error) {
+func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration, p msgb.Producer) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			switch ee := e.(type) {
@@ -350,6 +353,7 @@ func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err err
 	sub := reflect.ValueOf(cfg.subscriber)
 	outs := sub.Call([]reflect.Value{
 		reflect.ValueOf(ctx),
+		reflect.ValueOf(p),
 		reflect.ValueOf(z),
 	})
 	if e := outs[0].Interface(); e != nil {

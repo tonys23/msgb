@@ -13,7 +13,7 @@ type (
 		adapterType AdapterType
 		AdapterData []interface{}
 	}
-	Subscriber[T interface{}] func(context.Context, T) error
+	Subscriber[T interface{}] func(context.Context, Producer, T) error
 )
 
 func AddSubscriber[T interface{}](
