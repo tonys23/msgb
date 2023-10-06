@@ -273,6 +273,9 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 		routines++
 		go func(m *kafka.Message) {
 			defer c.CommitMessage(m)
+			defer func() {
+				routines--
+			}()
 			cfg := getConfigByTopic(gcfg, *m.TopicPartition.Topic)
 			if err := withRetries(func() error {
 				return callSubscribe(m, cfg)
@@ -283,7 +286,6 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 					log.Println("error to sent to dlq:" + err.Error())
 				}
 			}
-			routines--
 		}(msg)
 		for routines == k.cfg.MaxParallelMessages {
 			time.Sleep(time.Second)
