@@ -33,6 +33,7 @@ type (
 		addSubscriber(SagaSubscriberRegister)
 	}
 	SagaStateMachineImpl[T interface{}] struct {
+		producer    Producer
 		repository  SagaRepository[T]
 		subscribers []SagaSubscriberRegister
 	}
@@ -62,6 +63,7 @@ func When[T interface{}, R interface{}](
 func NewSagaStateMachine[T interface{}](rep SagaRepository[T], p Producer) SagaStateMachine[T] {
 	return &SagaStateMachineImpl[T]{
 		repository: rep,
+		producer:   p,
 	}
 }
 
@@ -92,7 +94,7 @@ func (sm *SagaStateMachineImpl[T]) addSubscriber(ssr SagaSubscriberRegister) {
 }
 
 func (sm *SagaStateMachineImpl[T]) SagaDefaultHandler() SagaDefaultHandler[T] {
-	return func(ctx context.Context, p Producer, t map[string]interface{}) (err error) {
+	return func(ctx context.Context, t map[string]interface{}) (err error) {
 		defer func() {
 			if e := recover(); e != nil {
 				switch ee := e.(type) {
@@ -139,13 +141,14 @@ func (sm *SagaStateMachineImpl[T]) SagaDefaultHandler() SagaDefaultHandler[T] {
 		isub := reflect.ValueOf(sb.Subs)
 		risub := isub.Call([]reflect.Value{
 			reflect.ValueOf(ctx),
-			reflect.ValueOf(p),
+			reflect.ValueOf(sm),
 			reflect.ValueOf(z),
 		})
 		if !risub[0].IsNil() {
 			err = risub[0].Interface().(error)
 			return err
 		}
+
 		return nil
 	}
 }
