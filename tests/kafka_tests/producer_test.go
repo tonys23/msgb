@@ -50,3 +50,14 @@ func Benchmark_Producer(b *testing.B) {
 		})
 	}
 }
+
+func Benchmark_ProducerTo(b *testing.B) {
+	m := configure_kafka_message_bus()
+	p := msgb.NewProducer(m)
+	for i := 0; i < b.N; i++ {
+		p.ProduceTo(context.Background(), tests.SimpleEvent{
+			SomeValue: b.Name(),
+			CreatedAt: time.Now(),
+		}, msgb_kafka.Adapter, "simple-event-topic")
+	}
+}

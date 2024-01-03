@@ -104,6 +104,21 @@ func (k *KafkaAdapter) Produce(ctx context.Context, m interface{}) error {
 	return k.produceMessage(data, cp)
 }
 
+func (k *KafkaAdapter) ProduceTo(ctx context.Context, m interface{}, adt msgb.AdapterType, tps ...string) error {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	for _, tp := range tps {
+		err = errors.Join(err, k.produceMessage(data, &KafkaProducerConfiguration{
+			Topic:     tp,
+			Partition: kafka.PartitionAny,
+			Offset:    kafka.OffsetEnd,
+		}))
+	}
+	return err
+}
+
 func (k *KafkaAdapter) produceMessage(data []byte, cp *KafkaProducerConfiguration) error {
 	kcm := k.getDefaultConfigMap()
 	p, err := kafka.NewProducer(&kcm)
