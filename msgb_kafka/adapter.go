@@ -28,6 +28,10 @@ type (
 
 	KafkaAdapterConfiguration struct {
 		BootstrapServers    string
+		Username            string
+		Password            string
+		SecurityProtocol    string
+		SaslMechanism       string
 		ReplicationFactor   int
 		Retries             int
 		MaxParallelMessages int
@@ -82,12 +86,21 @@ func (k *KafkaAdapter) AddMessageBus(m msgb.MessageBus) {
 func (k *KafkaAdapter) getDefaultConfigMap() kafka.ConfigMap {
 	return kafka.ConfigMap{
 		"bootstrap.servers": k.cfg.BootstrapServers,
+		"security.protocol": k.cfg.SecurityProtocol,
+		"sasl.mechanism":    k.cfg.SaslMechanism,
+		"sasl.username":     k.cfg.Username,
+		"sasl.password":     k.cfg.SaslMechanism,
 	}
 }
 
 func (k *KafkaAdapter) getConsumerConfigMap(cfg *KafkaConsumerConfiguration) kafka.ConfigMap {
 	return kafka.ConfigMap{
-		"bootstrap.servers":             k.cfg.BootstrapServers,
+		"bootstrap.servers": k.cfg.BootstrapServers,
+		"security.protocol": k.cfg.SecurityProtocol,
+		"sasl.mechanism":    k.cfg.SaslMechanism,
+		"sasl.username":     k.cfg.Username,
+		"sasl.password":     k.cfg.SaslMechanism,
+
 		"enable.auto.commit":            true,
 		"group.id":                      cfg.GroupId,
 		"auto.offset.reset":             cfg.AutoOffsetReset,
