@@ -84,28 +84,46 @@ func (k *KafkaAdapter) AddMessageBus(m msgb.MessageBus) {
 }
 
 func (k *KafkaAdapter) getDefaultConfigMap() kafka.ConfigMap {
-	return kafka.ConfigMap{
+	cm := kafka.ConfigMap{
 		"bootstrap.servers": k.cfg.BootstrapServers,
 		"security.protocol": k.cfg.SecurityProtocol,
 		"sasl.mechanism":    k.cfg.SaslMechanism,
 		"sasl.username":     k.cfg.Username,
 		"sasl.password":     k.cfg.SaslMechanism,
 	}
+	if k.cfg.SecurityProtocol != "" &&
+		k.cfg.SaslMechanism != "" &&
+		k.cfg.Username != "" &&
+		k.cfg.Password != "" {
+		cm["security.protocol"] = k.cfg.SecurityProtocol
+		cm["sasl.mechanism"] = k.cfg.SaslMechanism
+		cm["sasl.username"] = k.cfg.Username
+		cm["sasl.password"] = k.cfg.SaslMechanism
+	}
+
+	return cm
 }
 
 func (k *KafkaAdapter) getConsumerConfigMap(cfg *KafkaConsumerConfiguration) kafka.ConfigMap {
-	return kafka.ConfigMap{
+	cm := kafka.ConfigMap{
 		"bootstrap.servers": k.cfg.BootstrapServers,
-		"security.protocol": k.cfg.SecurityProtocol,
-		"sasl.mechanism":    k.cfg.SaslMechanism,
-		"sasl.username":     k.cfg.Username,
-		"sasl.password":     k.cfg.SaslMechanism,
 
 		"enable.auto.commit":            true,
 		"group.id":                      cfg.GroupId,
 		"auto.offset.reset":             cfg.AutoOffsetReset,
 		"partition.assignment.strategy": "cooperative-sticky",
 	}
+
+	if k.cfg.SecurityProtocol != "" &&
+		k.cfg.SaslMechanism != "" &&
+		k.cfg.Username != "" &&
+		k.cfg.Password != "" {
+		cm["security.protocol"] = k.cfg.SecurityProtocol
+		cm["sasl.mechanism"] = k.cfg.SaslMechanism
+		cm["sasl.username"] = k.cfg.Username
+		cm["sasl.password"] = k.cfg.SaslMechanism
+	}
+	return cm
 }
 
 func (k *KafkaAdapter) Produce(ctx context.Context, m interface{}) error {
@@ -136,7 +154,7 @@ func (k *KafkaAdapter) produceMessage(data []byte, cp *KafkaProducerConfiguratio
 	kcm := k.getDefaultConfigMap()
 	p, err := kafka.NewProducer(&kcm)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer p.Close()
 	dch := make(chan kafka.Event)
