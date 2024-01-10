@@ -86,10 +86,6 @@ func (k *KafkaAdapter) AddMessageBus(m msgb.MessageBus) {
 func (k *KafkaAdapter) getDefaultConfigMap() kafka.ConfigMap {
 	cm := kafka.ConfigMap{
 		"bootstrap.servers": k.cfg.BootstrapServers,
-		"security.protocol": k.cfg.SecurityProtocol,
-		"sasl.mechanism":    k.cfg.SaslMechanism,
-		"sasl.username":     k.cfg.Username,
-		"sasl.password":     k.cfg.SaslMechanism,
 	}
 	if k.cfg.SecurityProtocol != "" &&
 		k.cfg.SaslMechanism != "" &&
