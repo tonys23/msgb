@@ -104,7 +104,7 @@ func (k *KafkaAdapter) getConsumerConfigMap(cfg *KafkaConsumerConfiguration) kaf
 	cm := kafka.ConfigMap{
 		"bootstrap.servers": k.cfg.BootstrapServers,
 
-		"enable.auto.commit":            true,
+		"enable.auto.commit":            false,
 		"group.id":                      cfg.GroupId,
 		"auto.offset.reset":             cfg.AutoOffsetReset,
 		"partition.assignment.strategy": "cooperative-sticky",
