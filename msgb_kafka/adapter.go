@@ -94,7 +94,7 @@ func (k *KafkaAdapter) getDefaultConfigMap() kafka.ConfigMap {
 		cm["security.protocol"] = k.cfg.SecurityProtocol
 		cm["sasl.mechanism"] = k.cfg.SaslMechanism
 		cm["sasl.username"] = k.cfg.Username
-		cm["sasl.password"] = k.cfg.SaslMechanism
+		cm["sasl.password"] = k.cfg.Password
 	}
 
 	return cm
