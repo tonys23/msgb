@@ -250,9 +250,10 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 		cgc := gc
 		wg.Add(1)
 		go func() {
-			if err := k.subscribeConsumers(cctx, cgc); err != nil {
+			var err error
+			defer recover_error(&err)
+			if err = k.subscribeConsumers(cctx, cgc); err != nil {
 				cancel(err)
-				log.Println(err.Error())
 				wg.Done()
 				panic(err)
 			}
@@ -262,19 +263,29 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 }
 
 func rebalanceCallback(c *kafka.Consumer, event kafka.Event) error {
+
 	switch ev := event.(type) {
 	case kafka.AssignedPartitions:
-		log.Printf("%% %s rebalance: %d new partition(s) assigned: %v\n", c.GetRebalanceProtocol(), len(ev.Partitions), ev.Partitions)
+		fmt.Fprintf(os.Stderr,
+			"%% %s rebalance: %d new partition(s) assigned: %v\n",
+			c.GetRebalanceProtocol(), len(ev.Partitions),
+			ev.Partitions)
+
 		err := c.IncrementalAssign(ev.Partitions)
 		if err != nil {
 			panic(err)
 		}
+
 	case kafka.RevokedPartitions:
-		log.Printf("%% %s rebalance: %d partition(s) revoked: %v\n", c.GetRebalanceProtocol(), len(ev.Partitions), ev.Partitions)
+		fmt.Fprintf(os.Stderr,
+			"%% %s rebalance: %d partition(s) revoked: %v\n",
+			c.GetRebalanceProtocol(), len(ev.Partitions),
+			ev.Partitions)
 		if c.AssignmentLost() {
 			fmt.Fprintf(os.Stderr, "%% Current assignment lost!\n")
 		}
 	}
+
 	return nil
 }
 
@@ -302,18 +313,16 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 	if err := c.SubscribeTopics(tps, rebalanceCallback); err != nil {
 		return err
 	}
-
 	routines := 0
 	for {
 		msg, err := c.ReadMessage(100)
 		if err != nil {
-			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
-				continue
-			}
-			break
+			log.Println(err.Error())
+			continue
 		}
 		routines++
 		go func(m *kafka.Message) {
+			defer recover_error(&err)
 			defer c.CommitMessage(m)
 			defer func() {
 				routines--
@@ -333,7 +342,6 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 			time.Sleep(time.Second)
 		}
 	}
-	return err
 }
 
 func (k *KafkaAdapter) sendToDlq(msg *kafka.Message, cfg *KafkaConsumerConfiguration) error {
@@ -364,20 +372,22 @@ func withRetries(f func() error, retries int) (err error) {
 	return err
 }
 
-func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			switch ee := e.(type) {
-			case error:
-				err = ee
-			case string:
-				err = errors.New(ee)
-			default:
-				err = fmt.Errorf("undefined error: %v", ee)
-			}
-		}
-	}()
+func recover_error(err *error) {
+	if e := recover(); e != nil {
+		switch ee := e.(type) {
+		case error:
+			*err = ee
+		case string:
+			*err = errors.New(ee)
 
+		default:
+			*err = fmt.Errorf("undefined error: %v", ee)
+		}
+	}
+}
+
+func callSubscribe(msg *kafka.Message, cfg *KafkaConsumerConfiguration) (err error) {
+	defer recover_error(&err)
 	um := reflect.ValueOf(cfg.unmarshal)
 	rv := um.Call([]reflect.Value{
 		reflect.ValueOf(msg.Value),
