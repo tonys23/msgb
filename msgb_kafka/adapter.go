@@ -317,7 +317,9 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 	for {
 		msg, err := c.ReadMessage(100)
 		if err != nil {
-			log.Println(err.Error())
+			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+				log.Println(err.Error())
+			}
 			continue
 		}
 		routines++
