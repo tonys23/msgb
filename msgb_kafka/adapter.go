@@ -314,6 +314,7 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 		return err
 	}
 	routines := 0
+	ptr_rout := &routines
 	for {
 		msg, err := c.ReadMessage(100)
 		if err != nil {
@@ -322,31 +323,29 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 			}
 			continue
 		}
-		routines++
+		*ptr_rout++
 		go func(m *kafka.Message) {
 			defer recover_error(&err)
 			defer c.CommitMessage(m)
-			defer func() {
-				routines--
-			}()
+			defer func() { *ptr_rout-- }()
 			cfg := getConfigByTopic(gcfg, *m.TopicPartition.Topic)
 			if err := withRetries(func() error {
 				return callSubscribe(m, cfg)
 			}, cfg.Retries); err != nil {
 				if err = withRetries(func() error {
-					return k.sendToDlq(m, cfg)
+					return k.sendToDlq(m)
 				}, 10); err != nil {
 					log.Println("error to sent to dlq:" + err.Error())
 				}
 			}
 		}(msg)
-		for routines == k.cfg.MaxParallelMessages {
-			time.Sleep(time.Second)
-		}
+		wait_until_false(func() bool {
+			return *ptr_rout >= k.cfg.MaxParallelMessages
+		})
 	}
 }
 
-func (k *KafkaAdapter) sendToDlq(msg *kafka.Message, cfg *KafkaConsumerConfiguration) error {
+func (k *KafkaAdapter) sendToDlq(msg *kafka.Message) error {
 	kcm := k.getDefaultConfigMap()
 	topic := *msg.TopicPartition.Topic + "_error"
 	k.createTopics(context.Background(), &kcm, []kafka.TopicSpecification{
@@ -372,6 +371,12 @@ func withRetries(f func() error, retries int) (err error) {
 		}
 	}
 	return err
+}
+
+func wait_until_false(f func() bool) {
+	for f() {
+		time.Sleep(time.Second)
+	}
 }
 
 func recover_error(err *error) {
