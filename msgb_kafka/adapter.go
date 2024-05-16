@@ -198,32 +198,55 @@ func (k *KafkaAdapter) mapSubscribersToTopics(subs []msgb.SubscriberRegister) []
 func (k *KafkaAdapter) createTopics(
 	ctx context.Context,
 	kcm *kafka.ConfigMap,
-	tps []kafka.TopicSpecification) {
+	tps []kafka.TopicSpecification,
+) {
+
+	defer recover_all()
+
+	log.Printf("createTopics")
 	if len(tps) == 0 {
+		log.Printf("no topics configured")
 		return
 	}
+
+	log.Printf("creating admin client")
 	adm, err := kafka.NewAdminClient(kcm)
 	if err != nil {
+		log.Printf("admin client err: %v", err.Error())
 		panic(err)
 	}
 	defer adm.Close()
+
+	log.Printf("calling adm.createTopics: %v", tps)
 	r, err := adm.CreateTopics(ctx, tps)
 	if err != nil {
+		log.Printf("adm.CreateTopics err: %v", err.Error())
 		panic(err)
 	}
+
 	if r[0].Error.Code() != kafka.ErrNoError &&
 		r[0].Error.Code() != kafka.ErrTopicAlreadyExists {
+
+		log.Printf("r[0].Error.Error(): %v", r[0].Error.Error())
 		panic(r[0].Error)
 	}
+
+	log.Printf("createTopics finished")
 }
 
 func (k *KafkaAdapter) ensureCreateTopics(ctx context.Context) {
+	log.Printf("creating topics")
+
 	subs := k.messageBus.GetSubscribers(Adapter)
 	subj := k.messageBus.GetSubjects(Adapter)
 	kcm := k.getDefaultConfigMap()
+
+	log.Printf("creating subject topics")
 	k.createTopics(ctx,
 		&kcm,
 		k.mapSubjectsToTopics(subj))
+
+	log.Printf("creating subscribers topics")
 	go k.createTopics(ctx,
 		&kcm,
 		k.mapSubscribersToTopics(subs))
@@ -232,8 +255,13 @@ func (k *KafkaAdapter) ensureCreateTopics(ctx context.Context) {
 func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 	log.Println("initializing kafka subscribers")
 	defer k.InitializeSubscribers(ctx)
+
+	log.Println("getting subscribers")
 	subs := k.messageBus.GetSubscribers(Adapter)
 	cfgs := []KafkaConsumerConfiguration{}
+
+	log.Printf("got a total of %d subscribers", len(subs))
+
 	for _, s := range subs {
 		cfg := s.Cfg.(KafkaConsumerConfiguration)
 		cfg.subscriber = s.Subs
@@ -241,11 +269,14 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 		cfg.unmarshal = s.AdapterData[0]
 		cfgs = append(cfgs, cfg)
 	}
+
 	gcfg := msgb.Group(cfgs, func(cfg KafkaConsumerConfiguration) string {
 		return cfg.GroupId
 	})
 	cctx, cancel := context.WithCancelCause(ctx)
 	wg := sync.WaitGroup{}
+
+	log.Println("creating consumers")
 	for _, gc := range gcfg {
 		cgc := gc
 		wg.Add(1)
@@ -253,7 +284,9 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 			var err error
 			defer wg.Done()
 			defer recover_error(&err)
+			log.Printf("subscribing consumers for: %v", cgc[0].GroupId)
 			if err = k.subscribeConsumers(cctx, cgc); err != nil {
+				log.Printf("got error on subscribeConsumers: %v", err.Error())
 				cancel(err)
 				panic(err)
 			}
@@ -380,6 +413,8 @@ func wait_until_false(f func() bool) {
 }
 
 func recover_error(err *error) {
+	log.Printf("got error: %v", err)
+
 	if e := recover(); e != nil {
 		switch ee := e.(type) {
 		case error:
@@ -389,6 +424,20 @@ func recover_error(err *error) {
 
 		default:
 			*err = fmt.Errorf("undefined error: %v", ee)
+		}
+	}
+}
+func recover_all() {
+	if e := recover(); e != nil {
+		log.Printf("got error: %v", e)
+		switch ee := e.(type) {
+		case error:
+			log.Printf(ee.Error())
+		case string:
+			log.Printf(ee)
+
+		default:
+			log.Printf("undefined error: %v", ee)
 		}
 	}
 }
