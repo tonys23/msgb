@@ -201,8 +201,6 @@ func (k *KafkaAdapter) createTopics(
 	tps []kafka.TopicSpecification,
 ) {
 
-	defer recover_all()
-
 	log.Printf("createTopics")
 	if len(tps) == 0 {
 		log.Printf("no topics configured")
@@ -247,7 +245,7 @@ func (k *KafkaAdapter) ensureCreateTopics(ctx context.Context) {
 		k.mapSubjectsToTopics(subj))
 
 	log.Printf("creating subscribers topics")
-	go k.createTopics(ctx,
+	k.createTopics(ctx,
 		&kcm,
 		k.mapSubscribersToTopics(subs))
 }
@@ -334,16 +332,23 @@ func getConfigByTopic(cfg []KafkaConsumerConfiguration, topic string) *KafkaCons
 func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsumerConfiguration) error {
 	k.ensureCreateTopics(ctx)
 	kcm := k.getConsumerConfigMap(&gcfg[0])
+
+	log.Println("creating new consumer")
 	c, err := kafka.NewConsumer(&kcm)
 	if err != nil {
+		log.Printf("error to create consumer: %v", err.Error())
 		return err
 	}
 	defer c.Close()
+
 	tps := []string{}
 	for _, v := range gcfg {
 		tps = append(tps, v.Topic)
 	}
+
+	log.Printf("subscribing to topics: %v", tps)
 	if err := c.SubscribeTopics(tps, rebalanceCallback); err != nil {
+		log.Printf("error to subscribe to topics: %v", err.Error())
 		return err
 	}
 	routines := 0
@@ -432,9 +437,9 @@ func recover_all() {
 		log.Printf("got error: %v", e)
 		switch ee := e.(type) {
 		case error:
-			log.Printf(ee.Error())
+			log.Println(ee.Error())
 		case string:
-			log.Printf(ee)
+			log.Println(ee)
 
 		default:
 			log.Printf("undefined error: %v", ee)
