@@ -201,8 +201,6 @@ func (k *KafkaAdapter) createTopics(
 	tps []kafka.TopicSpecification,
 ) {
 
-	defer recover_all()
-
 	log.Printf("createTopics")
 	if len(tps) == 0 {
 		log.Printf("no topics configured")
