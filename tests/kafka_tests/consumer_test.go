@@ -19,7 +19,7 @@ func Test_InitializeSubscribers_With_Success(t *testing.T) {
 	m := configure_kafka_message_bus()
 	wg := sync.WaitGroup{}
 	wg.Add(20)
-	msgb_kafka.AddKafkaConsumer[tests.SimpleEvent](m, msgb_kafka.KafkaConsumerConfiguration{
+	msgb_kafka.AddKafkaConsumer(m, msgb_kafka.KafkaConsumerConfiguration{
 		Topic:           "simple-event-topic",
 		NumPartitions:   1,
 		GroupId:         fmt.Sprintf("%v", rand.Int63n(1000000000000)),
@@ -42,7 +42,7 @@ func Benchmark_InitializeSubscribers_With_Success(b *testing.B) {
 	m := configure_kafka_message_bus()
 	wg := sync.WaitGroup{}
 	wg.Add(b.N)
-	msgb_kafka.AddKafkaConsumer[tests.SimpleEvent](m, msgb_kafka.KafkaConsumerConfiguration{
+	msgb_kafka.AddKafkaConsumer(m, msgb_kafka.KafkaConsumerConfiguration{
 		Topic:           "simple-event-topic",
 		NumPartitions:   1,
 		GroupId:         fmt.Sprintf("%v", rand.Int63n(1000000000000)),

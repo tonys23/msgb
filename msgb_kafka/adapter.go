@@ -251,10 +251,10 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			var err error
+			defer wg.Done()
 			defer recover_error(&err)
 			if err = k.subscribeConsumers(cctx, cgc); err != nil {
 				cancel(err)
-				wg.Done()
 				panic(err)
 			}
 		}()
