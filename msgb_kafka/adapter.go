@@ -418,16 +418,17 @@ func wait_until_false(f func() bool) {
 }
 
 func recover_error(err *error) {
-	log.Printf("got error: %v", err)
-
 	if e := recover(); e != nil {
 		switch ee := e.(type) {
 		case error:
+			log.Printf("got error: %v", ee.Error())
 			*err = ee
 		case string:
+			log.Printf("got error: %v", ee)
 			*err = errors.New(ee)
 
 		default:
+			log.Printf("got error: %v", ee)
 			*err = fmt.Errorf("undefined error: %v", ee)
 		}
 	}
