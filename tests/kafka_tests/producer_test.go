@@ -16,7 +16,7 @@ func configure_kafka_message_bus() msgb.MessageBus {
 	m := msgb.NewMessageBus()
 	m.AddAdapter(msgb_kafka.NewKafkaAdapter(&msgb_kafka.KafkaAdapterConfiguration{
 		BootstrapServers:    "localhost:9092",
-		MaxParallelMessages: 10,
+		MaxParallelMessages: 20,
 	}))
 	return m
 }
@@ -43,11 +43,16 @@ func Benchmark_Producer(b *testing.B) {
 		Offset:    kafka.OffsetEnd,
 	})
 	p := msgb.NewProducer(m)
+	cb := make(chan int, 3)
 	for i := 0; i < b.N; i++ {
-		p.Produce(context.Background(), tests.SimpleEvent{
-			SomeValue: b.Name(),
-			CreatedAt: time.Now(),
-		})
+		cb <- i
+		go func() {
+			defer func() { <-cb }()
+			p.Produce(context.Background(), tests.SimpleEvent{
+				SomeValue: b.Name(),
+				CreatedAt: time.Now(),
+			})
+		}()
 	}
 }
 

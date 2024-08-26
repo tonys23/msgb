@@ -8,8 +8,6 @@ import (
 	"log"
 	"os"
 	"reflect"
-	"sync"
-	"time"
 
 	"github.com/Israelsodano/msgb"
 
@@ -250,10 +248,17 @@ func (k *KafkaAdapter) ensureCreateTopics(ctx context.Context) {
 		k.mapSubscribersToTopics(subs))
 }
 
+func forever(fn func()) {
+	for {
+		func() {
+			defer recover_all()
+			fn()
+		}()
+	}
+}
+
 func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 	log.Println("initializing kafka subscribers")
-	defer k.InitializeSubscribers(ctx)
-
 	log.Println("getting subscribers")
 	subs := k.messageBus.GetSubscribers(Adapter)
 	cfgs := []KafkaConsumerConfiguration{}
@@ -271,26 +276,14 @@ func (k *KafkaAdapter) InitializeSubscribers(ctx context.Context) {
 	gcfg := msgb.Group(cfgs, func(cfg KafkaConsumerConfiguration) string {
 		return cfg.GroupId
 	})
-	cctx, cancel := context.WithCancelCause(ctx)
-	wg := sync.WaitGroup{}
 
 	log.Println("creating consumers")
 	for _, gc := range gcfg {
 		cgc := gc
-		wg.Add(1)
-		go func() {
-			var err error
-			defer wg.Done()
-			defer recover_error(&err)
-			log.Printf("subscribing consumers for: %v", cgc[0].GroupId)
-			if err = k.subscribeConsumers(cctx, cgc); err != nil {
-				log.Printf("got error on subscribeConsumers: %v", err.Error())
-				cancel(err)
-				panic(err)
-			}
-		}()
+		go forever(func() {
+			k.subscribeConsumerGroup(ctx, cgc)
+		})
 	}
-	wg.Wait()
 }
 
 func rebalanceCallback(c *kafka.Consumer, event kafka.Event) error {
@@ -329,7 +322,7 @@ func getConfigByTopic(cfg []KafkaConsumerConfiguration, topic string) *KafkaCons
 	return nil
 }
 
-func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsumerConfiguration) error {
+func (k *KafkaAdapter) subscribeConsumerGroup(ctx context.Context, gcfg []KafkaConsumerConfiguration) {
 	k.ensureCreateTopics(ctx)
 	kcm := k.getConsumerConfigMap(&gcfg[0])
 
@@ -337,7 +330,7 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 	c, err := kafka.NewConsumer(&kcm)
 	if err != nil {
 		log.Printf("error to create consumer: %v", err.Error())
-		return err
+		panic(err)
 	}
 	defer c.Close()
 
@@ -345,27 +338,24 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 	for _, v := range gcfg {
 		tps = append(tps, v.Topic)
 	}
-
 	log.Printf("subscribing to topics: %v", tps)
+
 	if err := c.SubscribeTopics(tps, rebalanceCallback); err != nil {
 		log.Printf("error to subscribe to topics: %v", err.Error())
-		return err
+		panic(err)
 	}
-	routines := 0
-	ptr_rout := &routines
+
+	c_buffer := make(chan int, k.cfg.MaxParallelMessages)
 	for {
-		msg, err := c.ReadMessage(100)
+		msg, err := c.ReadMessage(-1)
 		if err != nil {
-			if err.(kafka.Error).Code() != kafka.ErrTimedOut {
-				log.Println(err.Error())
-			}
-			continue
+			panic(err)
 		}
-		*ptr_rout++
+		c_buffer <- 0
 		go func(m *kafka.Message) {
 			defer recover_error(&err)
 			defer c.CommitMessage(m)
-			defer func() { *ptr_rout-- }()
+			defer func() { <-c_buffer }()
 			cfg := getConfigByTopic(gcfg, *m.TopicPartition.Topic)
 			if err := withRetries(func() error {
 				return callSubscribe(m, cfg)
@@ -377,9 +367,6 @@ func (k *KafkaAdapter) subscribeConsumers(ctx context.Context, gcfg []KafkaConsu
 				}
 			}
 		}(msg)
-		wait_until_false(func() bool {
-			return *ptr_rout >= k.cfg.MaxParallelMessages
-		})
 	}
 }
 
@@ -411,12 +398,6 @@ func withRetries(f func() error, retries int) (err error) {
 	return err
 }
 
-func wait_until_false(f func() bool) {
-	for f() {
-		time.Sleep(time.Second)
-	}
-}
-
 func recover_error(err *error) {
 	if e := recover(); e != nil {
 		switch ee := e.(type) {
@@ -433,6 +414,7 @@ func recover_error(err *error) {
 		}
 	}
 }
+
 func recover_all() {
 	if e := recover(); e != nil {
 		log.Printf("got error: %v", e)
