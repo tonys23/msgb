@@ -9,7 +9,7 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/Israelsodano/msgb"
+	"travel/internal/msgb"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )

@@ -1,4 +1,4 @@
-module github.com/Israelsodano/msgb
+module travel/internal/msgb
 
 go 1.20
 

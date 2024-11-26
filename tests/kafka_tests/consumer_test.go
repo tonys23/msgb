@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Israelsodano/msgb/msgb_kafka"
-	"github.com/Israelsodano/msgb/tests"
+	"travel/internal/msgb/msgb_kafka"
+	"travel/internal/msgb/tests"
 )
 
 func Test_InitializeSubscribers_With_Success(t *testing.T) {

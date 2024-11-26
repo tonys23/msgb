@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Israelsodano/msgb"
-	"github.com/Israelsodano/msgb/msgb_kafka"
-	"github.com/Israelsodano/msgb/tests"
+	"travel/internal/msgb"
+	"travel/internal/msgb/msgb_kafka"
+	"travel/internal/msgb/tests"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
